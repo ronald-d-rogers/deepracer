@@ -24,4 +24,5 @@
 	branch = master
 [submodule "intel_coach"]
 	path = intel_coach
-	url = https://github.com/NervanaSystems/coach.git
+	branch = deepracer
+	url = https://github.com/crr0004/coach.git
