@@ -97,6 +97,7 @@ def get_graph_manager(**hp_dict):
 
     vis_params = VisualizationParameters()
     vis_params.dump_mp4 = False
+    vis_params.tensorboard = True
 
     ########
     # Test #
