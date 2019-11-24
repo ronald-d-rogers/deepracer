@@ -160,7 +160,7 @@ class DeepRacerRacetrackEnv(gym.Env):
                                       ':simulation-job/' + rospy.get_param('AWS_ROBOMAKER_SIMULATION_JOB_ID')
 
             # Setup SIM_TRACE_LOG data upload to s3
-            #self.setup_simtrace_data_upload_to_s3()
+            self.setup_simtrace_data_upload_to_s3()
 
             if self.job_type == TRAINING_JOB:
                 from custom_files.customer_reward_function import reward_function
@@ -221,8 +221,7 @@ class DeepRacerRacetrackEnv(gym.Env):
             self.simulation_start_time = 0
             self.allow_servo_step_signals = False
 
-    # remove this method as it only pertains to robomaker
-    '''
+    # this method has be altered to remove dependency on robomaker    
     def setup_simtrace_data_upload_to_s3(self):
         if node_type == SIMULATION_WORKER:
             #start timer to upload SIM_TRACE data to s3 when simapp exits
@@ -231,22 +230,22 @@ class DeepRacerRacetrackEnv(gym.Env):
             # - 300 seocnds is randomly chosen number based on various jobs launched that
             #   provides enough time to upload data to S3
             global simapp_data_upload_timer
-            session = boto3.session.Session()
-            robomaker_client = session.client('robomaker', region_name=self.aws_region)
-            result = robomaker_client.describe_simulation_job(
-                job=self.simulation_job_arn
-            )
-            logger.info("robomaker job description: {}".format(result))
-            self.simapp_upload_duration = result['maxJobDurationInSeconds'] - SIMAPP_DATA_UPLOAD_TIME_TO_S3
-            start = 0
+            #session = boto3.session.Session()
+            #robomaker_client = session.client('robomaker', region_name=self.aws_region)
+            #result = robomaker_client.describe_simulation_job(
+            #    job=self.simulation_job_arn
+            #)
+            #logger.info("robomaker job description: {}".format(result))            
+            self.simapp_upload_duration = SIMAPP_DATA_UPLOAD_TIME_TO_S3
+            start = datetime.datetime.now()
             if self.job_type == TRAINING_JOB:
-                logger.info("simapp training job started_at={}".format(result['lastStartedAt']))
-                start = result['lastStartedAt']
+                logger.info("simapp training job started_at={}".format(0))
+                #start = 0#result['lastStartedAt']
                 self.simtrace_s3_bucket = rospy.get_param('SAGEMAKER_SHARED_S3_BUCKET')
                 self.simtrace_s3_key = os.path.join(rospy.get_param('SAGEMAKER_SHARED_S3_PREFIX'), TRAINING_SIMTRACE_DATA_S3_OBJECT_KEY)
             else:
-                logger.info("simapp evaluation job started_at={}".format(result['lastUpdatedAt']))
-                start = result['lastUpdatedAt']
+                logger.info("simapp evaluation job started_at={}".format(0))
+                #start = 0#result['lastUpdatedAt']
                 self.simtrace_s3_bucket = rospy.get_param('MODEL_S3_BUCKET')
                 self.simtrace_s3_key = os.path.join(rospy.get_param('MODEL_S3_PREFIX'), EVALUATION_SIMTRACE_DATA_S3_OBJECT_KEY)
             end = start + datetime.timedelta(seconds=self.simapp_upload_duration)
@@ -260,7 +259,7 @@ class DeepRacerRacetrackEnv(gym.Env):
 
             #setup to upload SIM_TRACE_DATA to S3
             self.simtrace_data = DeepRacerRacetrackSimTraceData(self.simtrace_s3_bucket, self.simtrace_s3_key)
-            '''
+            
 
     def reset(self):
         if node_type == SAGEMAKER_TRAINING_WORKER:
@@ -588,7 +587,9 @@ class DeepRacerRacetrackEnv(gym.Env):
 
     def write_metrics_to_s3(self):
         session = boto3.session.Session()
-        s3_client = session.client('s3', region_name=self.aws_region)
+        s3_url = os.environ.get('S3_ENDPOINT_URL')
+        s3_client = session.client('s3', region_name=self.aws_region, endpoint_url=s3_url)
+        
         metrics_body = json.dumps({'metrics': self.metrics})
         s3_client.put_object(
             Bucket=self.metrics_s3_bucket,
