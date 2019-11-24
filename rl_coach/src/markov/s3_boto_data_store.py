@@ -7,9 +7,9 @@ import logging
 import traceback
 
 import boto3
+import botocore
 from google.protobuf import text_format
 from tensorflow.python.training.checkpoint_state_pb2 import CheckpointState
-from botocore.client import Config
 
 from rl_coach.data_stores.data_store import DataStore, DataStoreParameters, SyncFiles
 from markov import utils
@@ -47,8 +47,7 @@ class S3BotoDataStore(DataStore):
     def _get_client(self):
         session = boto3.session.Session()
         s3_url = os.environ.get('S3_ENDPOINT_URL')
-        config = Config(connect_timeout=5, read_timeout=5)
-        return session.client('s3', region_name=self.params.aws_region, endpoint_url=s3_url, config=config)
+        return session.client('s3', region_name=self.params.aws_region, endpoint_url=s3_url)
 
     def deploy(self) -> bool:
         return True
@@ -60,10 +59,23 @@ class S3BotoDataStore(DataStore):
         return True
 
     def upload_finished_file(self):
-        s3_client = self._get_client()
-        s3_client.upload_fileobj(Fileobj=io.BytesIO(b''),
-                                 Bucket=self.params.bucket,
-                                 Key=self._get_s3_key(SyncFiles.FINISHED.value))
+        try:
+            s3_client = self._get_client()
+            s3_client.upload_fileobj(Fileobj=io.BytesIO(b''),
+                                               Bucket=self.params.bucket,
+                                               Key=self._get_s3_key(SyncFiles.FINISHED.value))
+        except botocore.exceptions.ClientError as e:
+            utils.json_format_logger("Unable to upload finished file to {}, {}"
+                                                .format(self.params.bucket, e.response['Error']['Code']),
+                                                **utils.build_user_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                          utils.SIMAPP_EVENT_ERROR_CODE_400))
+            utils.simapp_exit_gracefully()
+        except Exception as e:
+            utils.json_format_logger("Unable to upload finished file to {}, {}"
+                                                .format(self.params.bucket, e),
+                                                **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                             utils.SIMAPP_EVENT_ERROR_CODE_500))
+            utils.simapp_exit_gracefully()
 
     def save_to_store(self):
         try:
@@ -83,7 +95,7 @@ class S3BotoDataStore(DataStore):
                 checkpoint_number = self._get_checkpoint_number(checkpoint)
 
             checkpoint_file = None
-            for root, dirs, files in os.walk(self.params.checkpoint_dir):
+            for root, _, files in os.walk(self.params.checkpoint_dir):
                 num_files_uploaded = 0
                 for filename in files:
                     # Skip the checkpoint file that has the latest checkpoint number
@@ -140,10 +152,18 @@ class S3BotoDataStore(DataStore):
                         s3_client.delete_object(Bucket=self.params.bucket,
                                                 Key=obj["Key"])
                         num_files += 1
+        except botocore.exceptions.ClientError as e:
+            utils.json_format_logger("Unable to upload checkpoint to {}, {}"
+                                                .format(self.params.bucket, e.response['Error']['Code']),
+                                                **utils.build_user_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                         utils.SIMAPP_EVENT_ERROR_CODE_400))
+            utils.simapp_exit_gracefully()
         except Exception as e:
-            utils.json_format_logger("Exception [{}] occured while uploading files on S3 for checkpoint".format(e),
-                      **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION, utils.SIMAPP_EVENT_ERROR_CODE_500))
-            raise e
+            utils.json_format_logger("Unable to upload checkpoint to {}, {}"
+                                                .format(self.params.bucket, e),
+                                                **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                             utils.SIMAPP_EVENT_ERROR_CODE_500))
+            utils.simapp_exit_gracefully()
 
     def load_from_store(self, expected_checkpoint_number=-1):
         try:
@@ -208,33 +228,66 @@ class S3BotoDataStore(DataStore):
                             num_files += 1
                         return True
 
+        except botocore.exceptions.ClientError as e:
+            utils.json_format_logger("Unable to download checkpoint from {}, {}"
+                                                .format(self.params.bucket, e.response['Error']['Code']),
+                                                **utils.build_user_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                          utils.SIMAPP_EVENT_ERROR_CODE_400))
+            utils.simapp_exit_gracefully()
         except Exception as e:
-            utils.json_format_logger("Exception [{}] occured while loading checkpoint from S3. Job failed!".format(e),
-                                     **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION, utils.SIMAPP_EVENT_ERROR_CODE_503))
-            traceback.print_exc()
-            sys.exit(1)
+            utils.json_format_logger("Unable to download checkpoint from {}, {}"
+                                                .format(self.params.bucket, e),
+                                                **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                             utils.SIMAPP_EVENT_ERROR_CODE_500))
+            utils.simapp_exit_gracefully()
 
     def store_ip(self, ip_address):
-        s3_client = self._get_client()
-        ip_data = {IP_KEY: ip_address}
-        ip_data_json_blob = json.dumps(ip_data)
-        ip_data_file_object = io.BytesIO(ip_data_json_blob.encode())
-        ip_done_file_object = io.BytesIO(b'done')
-        s3_client.upload_fileobj(ip_data_file_object, self.params.bucket, self.ip_data_key)
-        s3_client.upload_fileobj(ip_done_file_object, self.params.bucket, self.ip_done_key)
+        try:
+            s3_client = self._get_client()
+            ip_data = {IP_KEY: ip_address}
+            ip_data_json_blob = json.dumps(ip_data)
+            ip_data_file_object = io.BytesIO(ip_data_json_blob.encode())
+            ip_done_file_object = io.BytesIO(b'done')
+            s3_client.upload_fileobj(ip_data_file_object, self.params.bucket, self.ip_data_key)
+            s3_client.upload_fileobj(ip_done_file_object, self.params.bucket, self.ip_done_key)
+        except botocore.exceptions.ClientError as e:
+            utils.json_format_logger("Unable to store ip to {}, {}"
+                                                .format(self.params.bucket, e.response['Error']['Code']),
+                                                **utils.build_user_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                          utils.SIMAPP_EVENT_ERROR_CODE_400))
+            utils.simapp_exit_gracefully()
+        except Exception as e:
+            utils.json_format_logger("Unable to store ip to {}, {}"
+                                                .format(self.params.bucket, e),
+                                                **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                             utils.SIMAPP_EVENT_ERROR_CODE_500))
+            utils.simapp_exit_gracefully()
 
     def download_preset_if_present(self, local_path):
-        s3_client = self._get_client()
-        response = s3_client.list_objects(Bucket=self.params.bucket, Prefix=self.preset_data_key)
+        try:
+            s3_client = self._get_client()
+            response = s3_client.list_objects(Bucket=self.params.bucket, Prefix=self.preset_data_key)
 
-        # If we don't find a preset, return false
-        if "Contents" not in response:
-            return False
+            # If we don't find a preset, return false
+            if "Contents" not in response:
+                return False
 
-        success = s3_client.download_file(Bucket=self.params.bucket,
-                                          Key=self.preset_data_key,
-                                          Filename=local_path)
-        return success
+            success = s3_client.download_file(Bucket=self.params.bucket,
+                                                              Key=self.preset_data_key,
+                                                              Filename=local_path)
+            return success
+        except botocore.exceptions.ClientError as e:
+            utils.json_format_logger("Unable to download presets from {}, {}"
+                                                .format(self.params.bucket, e.response['Error']['Code']),
+                                                **utils.build_user_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                          utils.SIMAPP_EVENT_ERROR_CODE_400))
+            utils.simapp_exit_gracefully()
+        except Exception as e:
+            utils.json_format_logger("Unable to download presets from {}, {}"
+                                                .format(self.params.bucket, e),
+                                                **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                             utils.SIMAPP_EVENT_ERROR_CODE_500))
+            utils.simapp_exit_gracefully()
 
     def get_current_checkpoint_number(self):
         return self._get_checkpoint_number(self._get_current_checkpoint())
@@ -244,16 +297,17 @@ class S3BotoDataStore(DataStore):
             checkpoint_metadata_filepath = os.path.abspath(
                 os.path.join(self.params.checkpoint_dir, CHECKPOINT_METADATA_FILENAME))
             checkpoint = CheckpointState()
-            if os.path.exists(checkpoint_metadata_filepath) == False:
+            if not os.path.exists(checkpoint_metadata_filepath):
                 return None
 
             contents = open(checkpoint_metadata_filepath, 'r').read()
             text_format.Merge(contents, checkpoint)
             return checkpoint
         except Exception as e:
-            utils.json_format_logger("Exception[{}] occured while reading checkpoint metadata".format(e),
-                                     **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION, utils.SIMAPP_EVENT_ERROR_CODE_500))
-            raise e
+            utils.json_format_logger("Error when reading checkpoint metadata: {}".format(e),
+                                               **utils.build_system_error_dict(utils.SIMAPP_S3_DATA_STORE_EXCEPTION,
+                                                                                            utils.SIMAPP_EVENT_ERROR_CODE_500))
+            utils.simapp_exit_gracefully()
 
     def _get_checkpoint_number(self, checkpoint):
         checkpoint_relative_path = checkpoint.model_checkpoint_path
