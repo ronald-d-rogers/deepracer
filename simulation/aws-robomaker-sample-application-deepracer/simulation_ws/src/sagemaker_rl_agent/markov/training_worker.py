@@ -247,12 +247,15 @@ def main():
     host_ip_address = get_ip_from_host()
     s3_client.write_ip_config(host_ip_address)
     logger.info("Uploaded IP address information to S3: %s" % host_ip_address)
-    use_pretrained_model = args.pretrained_s3_bucket and args.pretrained_s3_prefix
+    use_pretrained_model = args.pretrained_s3_bucket is not None and args.pretrained_s3_prefix is not None
     if use_pretrained_model:
+        logger.info("Using pretrained model")
         s3_client_pretrained = SageS3Client(bucket=args.pretrained_s3_bucket,
                                             s3_prefix=args.pretrained_s3_prefix,
                                             aws_region=args.aws_region)
         s3_client_pretrained.download_model(args.pretrained_checkpoint_dir)
+    else:
+        logger.info("Not using pretrained model")
 
     memory_backend_params = RedisPubSubMemoryBackendParameters(redis_address="localhost",
                                                                redis_port=6379,

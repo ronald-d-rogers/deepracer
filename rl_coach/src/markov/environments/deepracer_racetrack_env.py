@@ -607,10 +607,10 @@ class DeepRacerRacetrackEnv(gym.Env):
         logger.info ("cancel_simulation_job: make sure to shutdown simapp first")
         simapp_shutdown()
 
-        session = boto3.session.Session()
-        robomaker_client = session.client('robomaker', region_name=self.aws_region)
-        robomaker_client.cancel_simulation_job(job=self.simulation_job_arn)
-        time.sleep(utils.ROBOMAKER_CANCEL_JOB_WAIT_TIME)
+        # session = boto3.session.Session()
+        # robomaker_client = session.client('robomaker', region_name=self.aws_region)
+        # robomaker_client.cancel_simulation_job(job=self.simulation_job_arn)
+        # time.sleep(utils.ROBOMAKER_CANCEL_JOB_WAIT_TIME)
 
 class DeepRacerRacetrackCustomActionSpaceEnv(DeepRacerRacetrackEnv):
     def __init__(self):
