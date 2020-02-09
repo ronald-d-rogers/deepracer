@@ -25,7 +25,8 @@ def set_throttle_steer(data):
     global pub_pos_left_steering_hinge
     global pub_pos_right_steering_hinge
 
-    throttle = data.drive.speed/0.1
+    throttle = data.drive.speed
+    print(throttle)
     steer = data.drive.steering_angle
 
     pub_vel_left_rear_wheel.publish(throttle)

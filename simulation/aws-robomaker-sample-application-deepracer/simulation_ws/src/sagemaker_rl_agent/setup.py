@@ -25,7 +25,7 @@ setup(
         'scikit-image==0.13.0',
         'shapely==1.6.4',
         'gym==0.10.5',
-        #'PyYAML==3.13',
+        'PyYAML>=3.11',
         'rospkg==1.1.7',
         'futures==3.1.1',
         'boto3==1.9.23',

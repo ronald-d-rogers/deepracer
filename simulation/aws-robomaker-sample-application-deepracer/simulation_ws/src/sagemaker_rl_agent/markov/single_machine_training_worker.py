@@ -42,10 +42,6 @@ def should_stop_training_based_on_evaluation():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--markov-preset-file',
-                        help="(string) Name of a preset file to run in Markov's preset directory.",
-                        type=str,
-                        default=os.environ.get("MARKOV_PRESET_FILE", "object_tracker.py"))
     parser.add_argument('-c', '--local_model_directory',
                         help='(string) Path to a folder containing a checkpoint to restore the model from.',
                         type=str,
@@ -77,14 +73,15 @@ def main():
 
     args = parser.parse_args()
 
-    if args.markov_preset_file:
-        markov_path = imp.find_module("markov")[1]
-        preset_location = os.path.join(markov_path, "presets", args.markov_preset_file)
-        path_and_module = preset_location + ":graph_manager"
-        graph_manager = short_dynamic_import(path_and_module, ignore_module_case=True)
-        print("Using custom preset file from Markov presets directory!")
+
+    from markov.sagemaker_graph_manager import get_graph_manager
+    params_blob = os.environ.get('SM_TRAINING_ENV', '')
+    if params_blob:
+        params = json.loads(params_blob)
+        sm_hyperparams_dict = params["hyperparameters"]
     else:
-        raise ValueError("Unable to determine preset file")
+        sm_hyperparams_dict = {}
+    graph_manager, robomaker_hyperparams_json = get_graph_manager(**sm_hyperparams_dict)
 
     # TODO: support other frameworks
     task_parameters = TaskParameters(framework_type=Frameworks.tensorflow,

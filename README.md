@@ -7,6 +7,32 @@ A repo for running deepracer locally. The rl_coach code comes from https://githu
 
 For additional help with OSX setup, please [refer to a supplemental guide provided by joezen777](https://gist.github.com/joezen777/6657bbe2bd4add5d1cdbd44db9761edb) in [issue #11](https://github.com/crr0004/deepracer/issues/11).
 
+# Command Dump
+TODO: Move these commands to the right spot
+TODO: Could probably move this to docker-composer now
+```
+# Run this where you want to store the data.
+MINIO_ACCESS_KEY=minio MINIO_SECRET_KEY=miniokey123 ./minio server minio_data/
+
+cd simulation; docker build -f Robomaker-kinetic.docker -t
+crr0004/deepracer_robomaker:jupyter .
+
+docker run --rm --name dr --env-file ./robomaker.env -p 5900 -p 8080 -p 8081 -v
+$(pwd)/simulation/aws-robomaker-sample-application-deepracer/simulation_ws/src:/app/robomaker-deepracer/simulation_ws/src
+-v $(readlink -f ../robo/checkpoint):/root/.ros/ -it
+crr0004/deepracer_robomaker:jupyter bash
+
+# In container
+source install/setup.sh
+src/run_for_jupyter.sh
+roslaunch deepracer_simulation local_training.launch &
+
+# Click on the link this spits out
+jupyter --no-browser --allow-root --ip $(hostname -i) --port 8080 &
+```
+
+
+
 # Community
 
 This repo was previously maintained by [@crr0004](https://github.com/crr0004), however is now maintained by the AWS Deepracer Community and as such is in the community repos. [@crr0004](https://github.com/crr0004) will still be around to help if needed, however won't be as active. [@breadcentric](https://github.com/breadcentric) is now maintaining this repo with help from the community.

@@ -81,8 +81,8 @@ NUM_STEPS_TO_CHECK_STUCK = 15
 ### Gym Env ###
 class DeepRacerRacetrackEnv(gym.Env):
 
-    def __init__(self):
-
+    def __init__(self, reward_function=None):
+        self.reward_function = reward_function
         # Create the observation space
         self.observation_space = spaces.Box(low=0, high=255,
                                             shape=(TRAINING_IMAGE_SIZE[1], TRAINING_IMAGE_SIZE[0], 3),
@@ -132,16 +132,20 @@ class DeepRacerRacetrackEnv(gym.Env):
                                       rospy.get_param('ROBOMAKER_SIMULATION_JOB_ACCOUNT_ID') + \
                                       ':simulation-job/' + rospy.get_param('AWS_ROBOMAKER_SIMULATION_JOB_ID')
 
-            if self.job_type == TRAINING_JOB:
-                from custom_files.customer_reward_function import reward_function
+            if self.reward_function == None:
+                from markov.defaults import reward_function
                 self.reward_function = reward_function
+
+            if self.job_type == TRAINING_JOB:
+                #from custom_files.customer_reward_function import reward_function
+                #self.reward_function = reward_function
                 self.metric_name = rospy.get_param('METRIC_NAME')
                 self.metric_namespace = rospy.get_param('METRIC_NAMESPACE')
                 self.training_job_arn = rospy.get_param('TRAINING_JOB_ARN')
                 self.target_number_of_episodes = rospy.get_param('NUMBER_OF_EPISODES')
                 self.target_reward_score = rospy.get_param('TARGET_REWARD_SCORE')
             else:
-                from markov.defaults import reward_function
+                
                 self.reward_function = reward_function
                 self.number_of_trials = 0
                 self.target_number_of_trials = rospy.get_param('NUMBER_OF_TRIALS')
@@ -283,6 +287,7 @@ class DeepRacerRacetrackEnv(gym.Env):
     def send_action(self, steering_angle, speed):
         # Simple v/r to computes the desired rpm
         wheel_rpm = speed/WHEEL_RADIUS
+        #print(wheel_rpm)
 
         for _, pub in self.velocity_pub_dict.items():
             pub.publish(wheel_rpm)
@@ -544,8 +549,8 @@ class DeepRacerRacetrackEnv(gym.Env):
             print("{}: {}".format(self.metric_name, reward))
 
 class DeepRacerRacetrackCustomActionSpaceEnv(DeepRacerRacetrackEnv):
-    def __init__(self):
-        DeepRacerRacetrackEnv.__init__(self)
+    def __init__(self, reward_function=None):
+        DeepRacerRacetrackEnv.__init__(self, reward_function=reward_function)
         try:
             # Try loading the custom model metadata (may or may not be present)
             with open('custom_files/model_metadata.json', 'r') as f:
