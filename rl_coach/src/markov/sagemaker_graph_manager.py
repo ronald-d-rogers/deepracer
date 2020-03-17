@@ -1,5 +1,5 @@
 from rl_coach.agents.clipped_ppo_agent import ClippedPPOAgentParameters
-from rl_coach.base_parameters import VisualizationParameters, PresetValidationParameters, DistributedCoachSynchronizationType
+from rl_coach.base_parameters import VisualizationParameters, PresetValidationParameters, EmbedderScheme, DistributedCoachSynchronizationType
 from rl_coach.core_types import TrainingSteps, EnvironmentEpisodes, EnvironmentSteps
 from rl_coach.environments.gym_environment import GymVectorEnvironment
 from rl_coach.exploration_policies.categorical import CategoricalParameters
@@ -33,6 +33,7 @@ def get_graph_manager(**hp_dict):
     params["num_episodes_between_training"] = int(hp_dict.get("num_episodes_between_training", 20))
     params["term_cond_max_episodes"] = int(hp_dict.get("term_cond_max_episodes", 100000))
     params["term_cond_avg_score"] = float(hp_dict.get("term_cond_avg_score", 100000))
+    params["input_embedder_scheme"] = hp_dict.get("input_embedder_scheme", "medium").lower()
 
     params_json = json.dumps(params, indent=2, sort_keys=True)
     print("Using the following hyper-parameters", params_json, sep='\n')
@@ -57,6 +58,21 @@ def get_graph_manager(**hp_dict):
     agent_params.network_wrappers['main'].batch_size = params["batch_size"]
     agent_params.network_wrappers['main'].optimizer_epsilon = 1e-5
     agent_params.network_wrappers['main'].adam_optimizer_beta2 = 0.999
+
+    embedder_scheme = EmbedderScheme.Medium
+
+    if params["input_embedder_scheme"] == "empty":
+        embedder_scheme = EmbedderScheme.Empty
+
+    if params["input_embedder_scheme"] == "shallow":
+        embedder_scheme = EmbedderScheme.Shallow
+
+    if params["input_embedder_scheme"] == "deep":
+        embedder_scheme = EmbedderScheme.Deep
+
+    agent_params.network_wrappers['main'].input_embedders_parameters['observation'].scheme = embedder_scheme
+
+    print(agent_params.network_wrappers['main'].input_embedders_parameters['observation'])
 
     if params["loss_type"] == "huber":
         agent_params.network_wrappers['main'].replace_mse_with_huber_loss = True
@@ -96,6 +112,7 @@ def get_graph_manager(**hp_dict):
     env_params.level = 'DeepRacerRacetrackCustomActionSpaceEnv-v0'
 
     vis_params = VisualizationParameters()
+    vis_params.print_networks_summary = True
     vis_params.dump_mp4 = False
 
     ########
